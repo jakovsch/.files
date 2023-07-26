@@ -1,0 +1,34 @@
+#!/bin/sh
+set -e
+
+PKGNAME="$1"
+VERSION="$2"
+
+[ -x usr/bin/sbctl ] || exit 0
+
+TMPDIR="$(mktemp -d)"
+DSTDIR="kernel/x86/microcode"
+
+mkdir -p "$TMPDIR/$DSTDIR"
+if [ -d /lib/firmware/amd-ucode ]
+then
+    cat /lib/firmware/amd-ucode/microcode_amd*.bin > "$TMPDIR/$DSTDIR/AuthenticAMD.bin"
+fi
+if [ -d /lib/firmware/intel-ucode ]
+then
+    cat /lib/firmware/intel-ucode/* > "$TMPDIR/$DSTDIR/GenuineIntel.bin"
+fi
+find "$TMPDIR" | cpio -oH newc > boot/ucode.img
+rm -r "$TMPDIR"
+
+usr/bin/sbctl bundle \
+    --kernel-img boot/vmlinuz-${VERSION} \
+    --initramfs boot/initramfs-${VERSION}.img \
+    --cmdline etc/boot/cmdline \
+    --amducode boot/ucode.img \
+    --efi-stub usr/lib/gummiboot/linuxx64.efi.stub \
+    --os-release usr/lib/os-release \
+    --splash-img etc/boot/splash.bmp \
+    --save boot/void.efi
+
+usr/bin/sbctl sign boot/void.efi

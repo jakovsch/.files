@@ -1,0 +1,4 @@
+compression: zstd
+strip: false
+universal: false
+vconsole: true

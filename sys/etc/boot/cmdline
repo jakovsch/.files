@@ -1,0 +1,1 @@
+add_efi_memmap bgrt_disable nmi_watchdog=0 amd_iommu=on amd_pstate=active cpufreq.default_governor=powersave cpufreq.energy_performance_preference=performance ro root=LABEL=data rootfstype=btrfs rootflags=subvol=/@root/@ptr

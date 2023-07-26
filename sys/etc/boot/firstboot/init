@@ -1,0 +1,90 @@
+#!/usr/bin/busybox.static sh
+set -e
+trap '' INT
+export PATH=/usr/bin
+alias run=busybox.static
+
+log() {
+    printf "[firstboot] %s\n" "$*"
+}
+
+parse() {
+    local key="${1:?}"
+    local val
+    val=" $(run cat /proc/cmdline) "
+    val="${val##* $key=}"
+    val="${val%% *}"
+    run [ "$val" != "" ] && printf "%s" "$val"
+}
+
+log "Init..."
+run mkdir -p /dev /sys /proc /mnt/esp /mnt/root
+run mount -t devtmpfs none /dev
+run mount -t sysfs none /sys
+run mount -t proc none /proc
+run sleep 1
+
+log "System info:"
+run cat /proc/version
+run cat /proc/cmdline
+
+log "Mount root"
+rootfs=$(parse root)
+fstype=$(parse rootfstype)
+#fsflags=$(parse rootflags)
+run mount \
+    ${fstype:+-t $fstype} \
+    -o rw,noatime,subvolid=5 \
+    $(run findfs ${rootfs:?Could not find root!}) \
+    /mnt/root
+
+log "Create initial subvolume layout"
+cd /mnt/root
+while read subvoltree
+do
+    local meta=$subvoltree/head/.subvolumetadata
+    run mkdir -p $subvoltree
+    btrfs -v subvolume create $subvoltree/head
+    run mkdir -p $meta
+    run chmod go-rwx $meta
+    run echo "base" > $meta/parent
+    run echo "head" > $meta/self
+    run echo "rw" > $meta/type
+    run ln -srf $subvoltree/head $subvoltree/@ptr
+done <<EOF
+@home
+@nix
+@root
+EOF
+
+log "Populate base system"
+run mv base/home/* @home/head
+run mv base/nix/* @nix/head
+run mv base/* @root/head
+run rmdir base
+
+log "Create base snapshots"
+while read subvoltree
+do
+    local meta=$subvoltree/base/.subvolumetadata
+    btrfs -v subvolume snapshot $subvoltree/head $subvoltree/base
+    run echo "base" > $meta/self
+    run echo "ro" > $meta/type
+    btrfs -v property set -ts $subvoltree/base ro true
+done <<EOF
+@home
+@nix
+@root
+EOF
+
+log "Cleanup..."
+cd /
+run sync
+run umount /mnt/root
+run umount /mnt/esp
+run umount /proc
+run umount /sys
+run umount /dev
+
+log "Done. Rebooting system..."
+reboot -f

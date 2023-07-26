@@ -1,0 +1,4 @@
+compression: zstd
+strip: false
+universal: true
+extra_files: reboot,btrfs,busybox.static
