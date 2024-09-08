@@ -3,24 +3,24 @@ Import-Module .\Provision.User
 Start-Transcript -OutputDirectory $PSScriptRoot -IncludeInvocationHeader
 $ErrorActionPreference = [System.Management.Automation.ActionPreference]::Continue
 
-Do {
-    $Result = Test-Connection -Count 1 -Quiet -ComputerName '1.1.1.1'
-} Until ($Result)
+Set-PowerProfile
+Set-UserPreferences
+Set-DesktopAndLocale
 
+While (Get-NetConnectionProfile | Where-Object {
+    $_.IPv4Connectivity -eq 'Internet' -or $_.IPv6Connectivity -eq 'Internet'
+} -ne $null) {
+    Write-Warning "Provision: Waiting for network"
+    Start-Sleep 5
+}
+
+#Get-WindowsUpdate -AcceptAll -Install -IgnoreReboot
 Install-PSModules
 Install-WinGet
-Install-WinGetPackages
+Install-Programs
 Install-Office
-Set-UserPreferences
-Set-PowerProfile
-
-OOSU10.exe $PSScriptRoot\OOSU10.cfg
-wsl.exe --install --inbox --no-distribution
-#Get-WindowsUpdate -AcceptAll -Install -IgnoreReboot
-
-Set-Culture -CultureInfo hr-HR
-Get-ChildItem "$env:USERPROFILE\Desktop\*.lnk" | ForEach-Object { Remove-Item $_ }
-Get-ChildItem "$env:Public\Desktop\*.lnk" | ForEach-Object { Remove-Item $_ }
+Install-WSL
+Set-ExternalTools
 
 Disable-ScheduledTask -TaskName '\Provision-User'
 Restart-Computer -Force
