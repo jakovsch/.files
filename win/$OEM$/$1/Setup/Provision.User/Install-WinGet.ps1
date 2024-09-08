@@ -18,53 +18,53 @@ Process{
         }
     )
     ForEach ($Dependency in $AppxDependencies) {
-        $InvokeWebRequestSplat = @{
+        $WebRequest = @{
             Uri             = 'https://store.rg-adguard.net/api/GetFiles'
             Method          = 'POST'
             ContentType     = 'application/x-www-form-urlencoded'
             Body            = "type=PackageFamilyName&url=$($Dependency.QualifiedName)&ring=Retail&lang=en-US"
             UseBasicParsing = $True
         }
-        $InvokeWebRequestSplat = @{
-            Uri     = ((Invoke-WebRequest @InvokeWebRequestSplat).Links | Where-Object {$_.OuterHTML -match '.appx' -and $_.outerHTML -match 'x64'}).href
+        $WebRequest = @{
+            Uri     = ((Invoke-WebRequest @WebRequest).Links | Where-Object {$_.OuterHTML -match '.appx' -and $_.outerHTML -match 'x64'}).href
             OutFile = "$env:temp\$($Dependency.ShortName).appx"
         }
-        Invoke-WebRequest @InvokeWebRequestSplat
+        Invoke-WebRequest @WebRequest
     }
 
-    $InvokeRestMethodSplat = @{
+    $RestMethod = @{
         Uri    = 'https://api.github.com/repos/microsoft/winget-cli/releases/latest'
         Method = 'GET'
     }
-    $LatestRelease = Invoke-RestMethod @InvokeRestMethodSplat
-    $InvokeWebRequestSplat = @{
+    $LatestRelease = Invoke-RestMethod @RestMethod
+    $WebRequest = @{
         Uri     = ($LatestRelease.assets | Where-Object {$_.name -like '*.msixbundle'}).browser_download_url
         OutFile = "$env:temp\winget.msixbundle"
     }
-    Invoke-WebRequest @InvokeWebRequestSplat
-    $InvokeWebRequestSplat = @{
+    Invoke-WebRequest @WebRequest
+    $WebRequest = @{
         Uri     = ($LatestRelease.assets | Where-Object {$_.name -like '*license*.xml'}).browser_download_url
         OutFile = "$env:temp\wingetlicense.xml"
     }
-    Invoke-WebRequest @InvokeWebRequestSplat
+    Invoke-WebRequest @WebRequest
 
     $AppxDependencies.ShortName | ForEach-Object {
-        $AddAppxPackageSplat = @{
+        $AppxPackage = @{
             Online = $True
             SkipLicense = $True
             PackagePath = "$env:temp\$($_).appx"
         }
-        Add-AppxProvisionedPackage @AddAppxPackageSplat
+        Add-AppxProvisionedPackage @AppxPackage
     }
-    $AddAppxPackageSplat = @{
+    $AppxPackage = @{
         Online = $True
         PackagePath = "$env:temp\winget.msixbundle"
         LicensePath = "$env:temp\wingetlicense.xml"
     }
-    Add-AppxProvisionedPackage @AddAppxPackageSplat
+    Add-AppxProvisionedPackage @AppxPackage
     Add-AppxPackage -DisableDevelopmentMode -Register "$((Get-AppxPackage Microsoft.DesktopAppInstaller).InstallLocation)\AppxManifest.xml"
 
-    $SetExecutionAliasSplat = @{
+    $ExecutionAlias = @{
         Path        = "$([System.Environment]::SystemDirectory)\winget.exe"
         PackageName = 'Microsoft.DesktopAppInstaller_8wekyb3d8bbwe'
         EntryPoint  = 'Microsoft.DesktopAppInstaller_8wekyb3d8bbwe!winget'
@@ -72,6 +72,6 @@ Process{
         AppType     = 'Desktop'
         Version     = 3
     }
-    Set-ExecutionAlias @SetExecutionAliasSplat
+    Set-ExecutionAlias @ExecutionAlias
     & explorer.exe "shell:appsFolder\Microsoft.DesktopAppInstaller_8wekyb3d8bbwe!winget"
 }
