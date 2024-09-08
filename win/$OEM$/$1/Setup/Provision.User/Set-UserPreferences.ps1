@@ -299,10 +299,10 @@ Process{
         }
     )
     ForEach ($RegPath in $RegPaths) {
+        If (!(Test-Path $RegPath.Item)) {
+            New-Item -Path $RegPath.Item -Force
+        }
         ForEach ($Property in $RegPath.Properties) {
-            If (!(Test-Path $RegPath.Item)) {
-                New-Item -Path $RegPath.Item -Force
-            }
             New-ItemProperty -Force -Path $RegPath.Item @Property
         }
     }

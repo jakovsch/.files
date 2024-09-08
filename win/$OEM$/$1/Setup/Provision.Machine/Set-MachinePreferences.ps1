@@ -461,14 +461,48 @@ Process{
                     Value = '0'
                 }
             )
+        },
+        @{
+            Item = 'HKLM:\System\CurrentControlSet\Services\NlaSvc\Parameters\Internet'
+            Properties = @(
+                @{
+                    Name = 'EnableActiveProbing'
+                    Type = 'DWord'
+                    Value = '1'
+                }
+            )
+        },
+        @{
+            Item = 'HKLM:\System\CurrentControlSet\Services\NetBT\Parameters\Interfaces\tcpip*'
+            Properties = @(
+                @{
+                    Name = 'NetbiosOptions'
+                    Type = 'DWord'
+                    Value = '2'
+                }
+            )
+        },
+        @{
+            Item = 'HKLM:\System\CurrentControlSet\Services\Dnscache\Parameters'
+            Properties = @(
+                @{
+                    Name = 'EnableMDNS'
+                    Type = 'DWord'
+                    Value = '0'
+                }
+            )
         }
     )
     ForEach ($RegPath in $RegPaths) {
+        If (!(Test-Path $RegPath.Item)) {
+            New-Item -Path $RegPath.Item -Force
+        }
         ForEach ($Property in $RegPath.Properties) {
-            If (!(Test-Path $RegPath.Item)) {
-                New-Item -Path $RegPath.Item -Force
-            }
             New-ItemProperty -Force -Path $RegPath.Item @Property
         }
     }
+
+    (Get-WmiObject -List Win32_NetworkAdapterConfiguration).EnableWINS($false, $false)
+    (Get-WmiObject Win32_NetworkAdapterConfiguration -Filter IpEnabled="true").SetTcpipNetbios(2)
+    Get-NetAdapterBinding -ComponentID "ms_tcpip6" | Disable-NetAdapterBinding -ComponentID "ms_tcpip6"
 }
