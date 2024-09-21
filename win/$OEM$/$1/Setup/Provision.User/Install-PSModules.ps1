@@ -7,5 +7,6 @@ Process{
     Install-Module -Name NtObjectManager -Force
     Install-Module -Name PSWindowsUpdate -Force
     Install-Module -Name PolicyFileEditor -Force
+    Install-Module -Name SpeculationControl -Force
     #Install-Module -Name Microsoft.WinGet.Client -Force
 }

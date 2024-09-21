@@ -88,46 +88,6 @@ Process{
             )
         },
         @{
-            Item = 'HKLM:\Software\Microsoft\Windows Defender\Features'
-            Properties = @(
-                @{
-                    Name = 'TamperProtection'
-                    Type = 'DWord'
-                    Value = '4'
-                },
-                @{
-                    Name = 'TamperProtectionSource'
-                    Type = 'DWord'
-                    Value = '2'
-                }
-            )
-        },
-        @{
-            Item = 'HKLM:\Software\Policies\Microsoft\Windows Defender'
-            Properties = @(
-                @{
-                    Name = 'DisableAntiSpyware'
-                    Type = 'DWord'
-                    Value = '1'
-                }
-            )
-        },
-        @{
-            Item = 'HKLM:\Software\Policies\Microsoft\Windows Defender\Real-Time Protection'
-            Properties = @(
-                @{
-                    Name = 'DisableBehaviorMonitoring'
-                    Type = 'DWord'
-                    Value = '1'
-                },
-                @{
-                    Name = 'DisableRealtimeMonitoring'
-                    Type = 'DWord'
-                    Value = '1'
-                }
-            )
-        },
-        @{
             Item = 'HKLM:\Software\Policies\Microsoft\Windows Defender\Spynet'
             Properties = @(
                 @{
@@ -334,6 +294,56 @@ Process{
                     Name = 'DisableWindowsConsumerFeatures'
                     Type = 'DWord'
                     Value = '1'
+                }
+            )
+        },
+        @{
+            Item = 'HKLM:\Software\Policies\Microsoft\Windows\WindowsUpdate'
+            Properties = @(
+                @{
+                    Name = 'AllowAutoWindowsUpdateDownloadOverMeteredNetwork'
+                    Type = 'DWord'
+                    Value = '0'
+                },
+                @{
+                    Name = 'ExcludeWUDriversInQualityUpdate'
+                    Type = 'DWord'
+                    Value = '0'
+                },
+                @{
+                    Name = 'AutoInstallMinorUpdates'
+                    Type = 'DWord'
+                    Value = '0'
+                },
+                @{
+                    Name = 'NoAutoRebootWithLoggedOnUsers'
+                    Type = 'DWord'
+                    Value = '1'
+                },
+                @{
+                    Name = 'SetAutoRestartNotificationDisable'
+                    Type = 'DWord'
+                    Value = '1'
+                },
+                @{
+                    Name = 'IncludeRecommendedUpdates'
+                    Type = 'DWord'
+                    Value = '1'
+                },
+                @{
+                    Name = 'AllowMUUpdateService'
+                    Type = 'DWord'
+                    Value = '1'
+                },
+                @{
+                    Name = 'SetAllowOptionalContent'
+                    Type = 'DWord'
+                    Value = '3'
+                },
+                @{
+                    Name = 'AUPowerManagement'
+                    Type = 'DWord'
+                    Value = '0'
                 }
             )
         },
