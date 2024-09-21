@@ -18,7 +18,7 @@
         <component name="Microsoft-Windows-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
             <UserData>
                 <ProductKey>
-                    <Key>M7XTQ-FN8P6-TTKYV-9D4CC-J462D</Key>
+                    <Key>KBN8V-HFGQ4-MGXVD-347P6-PDQGT</Key>
                     <WillShowUI>OnError</WillShowUI>
                 </ProductKey>
                 <AcceptEula>true</AcceptEula>
@@ -49,7 +49,7 @@
                 <RunSynchronousCommand wcm:action="add">
                     <Description>Machine Provisioning</Description>
                     <Order>1</Order>
-                    <Path>powershell.exe -Command &quot;Set-ExecutionPolicy Bypass -Scope Process -Force; C:\Setup\Provision-Machine.ps1</Path>
+                    <Path>powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\Setup\Provision-Machine.ps1</Path>
                     <WillReboot>Always</WillReboot>
                 </RunSynchronousCommand>
             </RunSynchronous>

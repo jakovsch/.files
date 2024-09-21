@@ -14,7 +14,7 @@ Process{
         'Microsoft.VCRedist.2008.x64'
         'Microsoft.VCRedist.2005.x64'
         'Microsoft.WindowsTerminal'
-        'Microsoft.OfficeDeploymentTool'
+        #'Microsoft.OfficeDeploymentTool'
         'OO-Software.ShutUp10'
         'REALiX.HWiNFO'
         'WinFsp.WinFsp'
@@ -29,4 +29,24 @@ Process{
     ForEach ($Package in $Packages) {
         Install-WinGetPackage $Package
     }
+
+    $WebRequest = @{
+        Method = 'GET'
+        Uri = 'https://officecdn.microsoft.com/pr/wsus/setup.exe'
+        OutFile = "$env:temp\odt.exe"
+    }
+    Invoke-WebRequest @WebRequest
+
+    Start-Process -FilePath WebRequest.OutFile -ArgumentList "/configure ${PSScriptRoot}\OfficeConfig.xml" -Wait -NoNewWindow
+
+    wsl --install --inbox --no-distribution
+
+    $WebRequest = @{
+        Method = 'GET'
+        Uri = 'https://wslstorestorage.blob.core.windows.net/wslblob/wsl_update_x64.msi'
+        OutFile = "$env:temp\wslkernel.msi"
+    }
+    Invoke-WebRequest @WebRequest
+
+    Start-Process msiexec.exe -ArgumentList "/i $($WebRequest.OutFile) /quiet /norestart" -Wait -NoNewWindow
 }

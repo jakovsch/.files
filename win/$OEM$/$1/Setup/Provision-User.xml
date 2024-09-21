@@ -38,7 +38,7 @@
   <Actions Context="Author">
     <Exec>
       <Command>powershell.exe</Command>
-      <Arguments>-Command "Set-ExecutionPolicy Bypass -Scope Process -Force; C:\Setup\Provision-User.ps1"</Arguments>
+      <Arguments>-ExecutionPolicy Bypass -File C:\Setup\Provision-User.ps1</Arguments>
     </Exec>
   </Actions>
 </Task>
