@@ -1,0 +1,5 @@
+PARTLABEL=data	/			btrfs	ro,ssd,noatime,nodiscard,subvol=@root/@ptr	0	1
+PARTLABEL=data	/home		btrfs	rw,nosuid,nodev,subvol=@home/@ptr			0	2
+PARTLABEL=data	/var		btrfs	rw,subvol=@var/@ptr							0	2
+tmpfs			/tmp		tmpfs	mode=1777,size=8G,nosuid,nodev				0	0
+/nix			/var/nix	none	bind,rw										0	0

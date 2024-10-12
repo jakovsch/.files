@@ -4,31 +4,35 @@ set -e
 PKGNAME="$1"
 VERSION="$2"
 
-[ -x usr/bin/sbctl ] || exit 0
+test -x usr/bin/cpio
+test -x usr/bin/sbctl
+test -f usr/lib/systemd/boot/efi/linuxx64.efi.stub
+test -f boot/vmlinuz-$VERSION
+test -f boot/initramfs-$VERSION.img
 
-TMPDIR="$(mktemp -d)"
+TMPDIR="$(mktemp -dp tmp)"
 DSTDIR="kernel/x86/microcode"
 
 mkdir -p "$TMPDIR/$DSTDIR"
-if [ -d /lib/firmware/amd-ucode ]
+if [ -d lib/firmware/amd-ucode ]
 then
-    cat /lib/firmware/amd-ucode/microcode_amd*.bin > "$TMPDIR/$DSTDIR/AuthenticAMD.bin"
+    cat lib/firmware/amd-ucode/microcode_amd*.bin > "$TMPDIR/$DSTDIR/AuthenticAMD.bin"
 fi
-if [ -d /lib/firmware/intel-ucode ]
+if [ -d lib/firmware/intel-ucode ]
 then
-    cat /lib/firmware/intel-ucode/* > "$TMPDIR/$DSTDIR/GenuineIntel.bin"
+    cat lib/firmware/intel-ucode/* > "$TMPDIR/$DSTDIR/GenuineIntel.bin"
 fi
-find "$TMPDIR" | cpio -oH newc > boot/ucode.img
+(cd "$TMPDIR"; find . | cpio -oH newc) > boot/ucode-$VERSION.img
 rm -r "$TMPDIR"
 
 usr/bin/sbctl bundle \
-    --kernel-img boot/vmlinuz-${VERSION} \
-    --initramfs boot/initramfs-${VERSION}.img \
+    --kernel-img boot/vmlinuz-$VERSION \
+    --initramfs boot/initramfs-$VERSION.img \
+    --amducode boot/ucode-$VERSION.img \
     --cmdline etc/boot/cmdline \
-    --amducode boot/ucode.img \
-    --efi-stub usr/lib/gummiboot/linuxx64.efi.stub \
-    --os-release usr/lib/os-release \
     --splash-img etc/boot/splash.bmp \
+    --os-release usr/lib/os-release \
+    --efi-stub usr/lib/systemd/boot/efi/linuxx64.efi.stub \
     --save boot/void.efi
 
-usr/bin/sbctl sign boot/void.efi
+usr/bin/vkpurge rm all

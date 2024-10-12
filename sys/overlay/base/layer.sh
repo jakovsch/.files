@@ -1,71 +1,107 @@
 #!/bin/sh
 set -e
 
+update-ca-certificates
 xbps-install -Suy xbps
-xbps-install -uy
-
-xbps-install -y \
-    vpm vsv \
-    void-repo-nonfree \
-    base-minimal
-    # base-files musl {core,find,diff}utils util-linux iana-etc tzdata
+xbps-install -uy void-repo-nonfree base-container
+    # base-files {core,find,diff}utils util-linux iana-etc tzdata
     # dash grep sed gawk nvi which tar gzip shadow procps-ng runit-void
-    # removed-packages
+    # removed-packages glibc glibc-locales
 
-PKGS=$(sed 's/#.*$//' <<'EOF'
+PKGS=$(sed '/^\s*#/d' <<'EOF'
     # util: shell
-    opendoas bash moreutils lsof pv less file tree ncdu nano ufetch psmisc acl-progs attr-progs
-    mdocml zip unzip bzip2 xz lz4 zstd cpio rclone restic rsync binutils
+    # lsof pv less file tree ncdu nano psmisc acl-progs attr-progs libcap-progs
+    # zip unzip bzip2 xz lz4 zstd rclone restic rsync moreutils
+    opendoas bash vpm vsv ufetch cpio binutils mdocml
     # util: net
-    iproute2 iputils nftables iptables-nft traceroute openbsd-netcat socat ldns whois
-    openssl openssh curl ethtool iw
+    # iputils traceroute ldns whois openbsd-netcat socat curl openssl ethtool iw
+    iproute2 nftables iptables-nft openssh
     # util: disk, fs
-    nvme-cli smartmontools hdparm sdparm parted gptfdisk e2fsprogs btrfs-progs dosfstools
-    cryptsetup
+    # nvme-cli smartmontools hdparm sdparm parted e2fsprogs dosfstools
+    gptfdisk btrfs-progs cryptsetup
     # util: stat, perf, boot
-    htop powertop nvtop wavemon pciutils usbutils sysstat lm_sensors cpupower efibootmgr sbctl
-    glxinfo Vulkan-Tools wayland-utils wlr-randr
+    # htop powertop nvtop wavemon pciutils usbutils efibootmgr
+    sbctl sysstat lm_sensors cpupower glxinfo Vulkan-Tools libva-utils wayland-utils
     # util: pkg, virt
-    nix proot bubblewrap
+    # proot bubblewrap flatpak podman
+    nix
     # sys: kernel, firmware
-    linux-base linux-firmware linux kmod kpartx booster wifi-firmware sof-firmware bluez
-    gummiboot-efistub
+    linux-base linux-firmware linux kmod kpartx booster wifi-firmware sof-firmware
+    systemd-boot-efistub
     # sys: service
-    socklog-void snooze eudev elogind dbus acpid tlp iwd openresolv chrony tailscale pulseaudio
+    socklog-void snooze eudev elogind dbus polkit greetd acpid tlp bluez iwd nscd
+    openresolv chrony tailscale
     # sys: lib
-    pam kbd ncurses readline zlib fuse fuse3 mesa-dri mesa-vaapi mesa-vdpau mesa-vulkan-radeon
-    vulkan-loader libva libvdpau wayland xorg-server-xwayland fontconfig
+    acl attr pam kbd ncurses readline zlib fuse fuse3 vulkan-loader ocl-icd
+    # mesa-dri mesa-vulkan-radeon mesa-vaapi mesa-vdpau libva libvdpau
+    # sys: gui
+    tuigreet
+    # wayland xorg-server-xwayland wlr-randr fontconfig pulseaudio
     # data
-    ca-certificates hwids man-pages
+    ca-certificates hwids man-pages mime-types
 EOF
 )
 
-vpm install -y $PKGS
+xbps-install -y $PKGS
 xbps-pkgdb -m manual $PKGS
-vpm removerecursive -y base-voidstrap
-vpm setalternative iptables-nft
+xbps-reconfigure -f glibc-locales
+xbps-alternatives -s iptables-nft
 
-ln -sf /usr/share/zoneinfo/Europe/Zagreb /etc/localtime
+rm /etc/*.new-* /etc/runit/runsvdir/default/*
+ln -s /usr/share/zoneinfo/Europe/Zagreb /etc/localtime
+
+test -n "$HOST"
+echo "$HOST" > /etc/hostname
+sed -i 's/localhost.*$/\0 '"$HOST/" /etc/hosts
+
+chmod 0400 /etc/doas.conf
+chmod +x /etc/boot/recovery/init
+chmod +x /etc/kernel.d/post-install/*
+chmod +x /etc/greetd/session.d/user.sh
+
+usermod --lock root
 
 while read SV
 do
-    ln -sf /etc/sv/$SV /etc/runit/runsvdir/default/
+    ln -s /etc/sv/$SV /etc/runit/runsvdir/default/
 done <<EOF
+acpid
+agetty-tty1
+chronyd
 dbus
-socklog-unix
+ead
+elogind
+greetd
+iwd
 nanoklogd
+nftables
+nix-daemon
+nscd
+polkitd
+rtkit
+snooze-*
+socklog-unix
+sshd
+tailscaled
+tlp
+udevd
 EOF
 
-chmod +x /etc/kernel.d/post-install/*
-chmod +x /etc/boot/firstboot/init
+kernel="$(ls /usr/lib/modules | head -1)"
 
-mkdir -p /usr/share/secureboot/keys/PK
-mkdir -p /usr/share/secureboot/keys/KEK
-mkdir -p /usr/share/secureboot/keys/db
-sbctl import-keys \
-    --pk-key /etc/boot/keys/pk.key \
-    --pk-cert /etc/boot/keys/pk.crt \
-    --kek-key /etc/boot/keys/kek.key \
-    --kek-cert /etc/boot/keys/kek.crt \
-    --db-key /etc/boot/keys/db.key \
-    --db-cert /etc/boot/keys/db.crt
+booster build \
+    --universal \
+    --kernel-version=$kernel \
+    --init-binary=/etc/boot/recovery/init \
+    --config=/etc/boot/recovery/booster.yaml \
+    recovery.img
+sbctl bundle \
+    --kernel-img /boot/vmlinuz-$kernel \
+    --initramfs recovery.img \
+    --cmdline /etc/boot/recovery/cmdline \
+    --efi-stub /usr/lib/systemd/boot/efi/linuxx64.efi.stub \
+    --save /boot/recovery.efi
+
+rm recovery.img
+rm -rf /media /tmp/* /run/*
+ln -sr run/media /media

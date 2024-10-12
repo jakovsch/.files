@@ -1,0 +1,17 @@
+[terminal]
+vt = 2
+
+[default_session]
+command = """tuigreet -rit \
+    --time-format '%A - %e %B %Y - %T' \
+    --command /etc/greetd/session.d/user.sh \
+    --remember-user-session \
+    --user-menu \
+    --asterisks \
+    --window-padding 4 \
+    --container-padding 2 \
+    --prompt-padding 2 \
+    --power-shutdown 'doas -n shutdown -P now' \
+    --power-reboot 'doas -n shutdown -r now' \
+"""
+user = "_greeter"

@@ -1,24 +1,34 @@
+define NL
+
+
+endef
+
 required = curl tar zstd openssl uuidgen
-_ := $(foreach cmd,$(required),$(if \
+$(foreach cmd,$(required),$(if \
 	$(shell command -v $(cmd)),,$(error "required: $(cmd)") \
 ))
 
-BUILD = build
-KEYDIR = efi/keys
-IMGDIR = $(BUILD)/img
-TMPDIR = $(BUILD)/tmp
-EFIVARS = pk kek db
+BUILD ?= build
+KEYDIR ?= efi/keys
+TMPDIR ?= $(BUILD)/tmp
+
 EFIUUID = $(BUILD)/efi.uuid
+EFIVARS = pk kek db
 CNAME = boot.schrama.xyz
+
 KEYS = $(EFIVARS:%=$(KEYDIR)/%.key)
 SIGS = $(EFIVARS:%=$(BUILD)/%.esl)
-DIRS = $(BUILD)/dl $(BUILD)/pkg $(BUILD)/root $(TMPDIR) $(KEYDIR) $(IMGDIR)
+DIRS = $(BUILD)/dl $(BUILD)/img $(BUILD)/pkg $(BUILD)/cache $(TMPDIR) $(KEYDIR)
+
+overlays ?= base user
+include $(foreach i,$(overlays),$(i:%=overlay/%/Makefile))
 
 sources = \
 	https://uefi.org/sites/default/files/resources/DBXUpdate.bin \
 	https://www.microsoft.com/pkiops/certs/MicWinProPCA2011_2011-10-19.crt \
 	https://www.microsoft.com/pkiops/certs/MicCorUEFCA2011_2011-06-27.crt \
-	https://repo-default.voidlinux.org/live/20221001/void-x86_64-musl-ROOTFS-20221001.tar.xz \
+	https://repo-default.voidlinux.org/static/xbps-static-latest.x86_64-musl.tar.xz \
+	https://github.com/pbatard/efifs/releases/download/v1.10/erofs_x64.efi \
 	https://archlinux.org/packages/extra/any/edk2-shell/download \
 	https://archlinux.org/packages/extra/any/memtest86+-efi/download \
 	https://archlinux.org/packages/extra/any/shim/download \
@@ -27,22 +37,25 @@ sources = \
 sources := $(foreach i,$(sources),$(i:https://%=$(BUILD)/dl/%))
 sources := $(foreach i,$(sources),$(i:%/download=%.pkg))
 
-all: enrollimg espimg rootfs
+.PHONY: all clean enroll boot recovery
+all: enroll boot recovery
+enroll: $(BUILD)/img/enroll.img
+boot: $(BUILD)/img/esp.img
+recovery: $(BUILD)/img/recovery.img
 
-enrollimg: $(DIRS) $(sources) $(SIGS) $(IMGDIR)/enroll.img
+clean:
+	rm -rf $(TMPDIR) $(BUILD)
 
-espimg: $(DIRS) $(sources) $(KEYS) $(IMGDIR)/esp.img
+$(BUILD)/%.img: $(sources) | $(DIRS)
 
-rootfs: $(DIRS) $(sources) $(KEYS) $(IMGDIR)/rootfs.img
-
-$(IMGDIR)/enroll.img: TMP := $(shell mktemp -dp $(TMPDIR))
-$(IMGDIR)/enroll.img:
+$(BUILD)/img/enroll.img: TMP := $(shell mktemp -dp $(TMPDIR))
+$(BUILD)/img/enroll.img: $(SIGS)
 	truncate -s 16MiB $@
-	parted --script -a optimal $@ -- \
+	parted -sa optimal $@ -- \
 		mklabel gpt \
 		mkpart esp fat16 1MiB 100% \
 		set 1 esp on
-	mkfs.vfat -F 16 -S 512 -n ENROLL --offset=2048 $@
+	mkfs.fat -F 16 -S 512 -n ENROLL --offset=2048 $@
 	mkdir -p $(TMP)/EFI/BOOT
 	cp $(BUILD)/pkg/usr/share/edk2-shell/x64/Shell_Full.efi $(TMP)/EFI/BOOT/BOOTX64.EFI
 	cp $(BUILD)/pkg/usr/share/efitools/efi/UpdateVars.efi $(TMP)
@@ -51,54 +64,43 @@ $(IMGDIR)/enroll.img:
 	cp efi/startup.nsh $(TMP)/EFI/BOOT
 	mcopy -Qsi $@@@1M $(TMP)/* ::/
 
-$(IMGDIR)/esp.img: TMP := $(shell mktemp -dp $(TMPDIR))
-$(IMGDIR)/esp.img:
-	truncate -s 8GiB $@
-	parted --script -a optimal $@ -- \
-		mklabel gpt \
-		mkpart esp fat32 1MiB 321MiB \
-		mkpart data btrfs 321MiB 100% \
-		set 1 esp on \
-		set 2 msftdata on
-	mkfs.vfat -F 32 -S 4096 -n ESP --offset=256 $@
-	mkdir -p $(TMP)/EFI/BOOT/drivers
-	mkdir -p $(TMP)/EFI/BOOT/theme
+$(BUILD)/img/esp.img: TMP := $(shell mktemp -dp $(TMPDIR))
+$(BUILD)/img/esp.img: $(KEYS)
 	mkdir -p $(TMP)/EFI/tools
+	mkdir -p $(TMP)/EFI/BOOT/theme
+	mkdir -p $(TMP)/EFI/BOOT/drivers
 	cp $(BUILD)/pkg/usr/share/refind/refind_x64.efi $(TMP)/EFI/BOOT/BOOTX64.EFI
 	cp $(BUILD)/pkg/usr/share/refind/drivers_x64/btrfs_x64.efi $(TMP)/EFI/BOOT/drivers
 	cp $(BUILD)/pkg/usr/share/refind/drivers_x64/ext4_x64.efi $(TMP)/EFI/BOOT/drivers
 	cp $(BUILD)/pkg/usr/share/refind/drivers_x64/iso9660_x64.efi $(TMP)/EFI/BOOT/drivers
-	cp $(BUILD)/pkg/usr/share/edk2-shell/x64/Shell_Full.efi $(TMP)/EFI/tools
-	cp $(BUILD)/pkg/usr/share/shim/mmx64.efi $(TMP)/EFI/tools
-	cp $(BUILD)/pkg/boot/memtest86+/memtest.efi $(TMP)/EFI/tools
+	cp $(BUILD)/pkg/usr/share/edk2-shell/x64/Shell_Full.efi $(TMP)/EFI/tools/shell.efi
+	cp $(BUILD)/pkg/usr/share/shim/mmx64.efi $(TMP)/EFI/tools/mmx64.efi
+	cp $(BUILD)/pkg/boot/memtest86+/memtest.efi $(TMP)/EFI/tools/memtest86.efi
+	cp $(BUILD)/dl/github.com/pbatard/efifs/releases/download/v1.10/erofs_x64.efi $(TMP)/EFI/BOOT/drivers
 	cp -r efi/theme/icons $(TMP)/EFI/BOOT/theme/icons
 	cp -r efi/theme/fonts $(TMP)/EFI/BOOT/theme/fonts
 	cp efi/refind.conf $(TMP)/EFI/BOOT
 	cp efi/theme.conf $(TMP)/EFI/BOOT
-	find $(TMP) -name *.efi | xargs -I % sbsign \
+	find $(TMP) -name '*.efi' ! -name 'shell.efi' | xargs -I % sbsign \
 		--key $(KEYDIR)/db.key --cert $(KEYDIR)/db.crt --output % %
-	mcopy -Qsi $@@@1M $(TMP)/* ::/
+	mkfs.fat -F 16 -s 1 -C -S 4096 $@ 32768
+	mcopy -Qsi $@ $(TMP)/* ::/
 
-$(IMGDIR)/rootfs.img: TMP := $(shell mktemp -dp $(TMPDIR))
-$(IMGDIR)/rootfs.img:
-	truncate -s 8GiB $@
-	cp --archive $(BUILD)/root $(TMP)/base
-	cp -r etc $(TMP)/base/etc
-	proot \
-		-0 -r $(TMP)/base -w / \
-		-b /dev -b /sys -b /proc -b /run -b /etc/resolv.conf \
-		-b efi/keys:/etc/boot/keys \
-		-b bootstrap.sh:/root/bootstrap.sh \
-		su - -c "chmod +x bootstrap.sh && ./$$_"
-	mkfs.btrfs \
-		--metadata dup \
-		--checksum xxhash \
-		--nodesize 16KiB \
-		--sectorsize 4096 \
-		--features free-space-tree \
-		--label data \
-		--rootdir $(TMP) \
-		--shrink --nodiscard $@
+$(BUILD)/img/recovery.img: TMP := $(shell mktemp -dp $(TMPDIR))
+$(BUILD)/img/recovery.img: $(KEYS)
+	mkdir -p $(TMP)/var/db/xbps $(TMP)/var/cache/xbps
+	cp -a $(BUILD)/pkg/var/db/xbps/keys $(TMP)/var/db/xbps
+	XBPS_ARCH=x86_64 unshare -r --map-auto \
+		$(BUILD)/pkg/usr/bin/xbps-install.static \
+		-R https://repo-default.voidlinux.org/current \
+		-c $(realpath $(BUILD))/cache -r $(TMP) -Sy base-container
+	$(foreach i,$(overlays),$(recovery.$(i))$(NL))
+	find $(TMP)/boot -name '*.efi' | xargs -I % sbsign \
+		--key $(KEYDIR)/db.key --cert $(KEYDIR)/db.crt --output % %
+	unshare -r --map-auto mkfs.erofs \
+		-L recovery \
+		-b4096 \
+		$@ $(TMP)
 
 $(DIRS):
 	mkdir -p $@
@@ -108,7 +110,7 @@ $(BUILD)/dl/%:
 
 $(BUILD)/dl/%.tar.xz:
 	curl -sSL --create-dirs -o $@ "https://$*.tar.xz"
-	tar -I xz -xf $@ --directory=$(BUILD)/root
+	tar -I xz -xf $@ --directory=$(BUILD)/pkg
 
 $(BUILD)/dl/%.pkg:
 	curl -sSL --create-dirs -o $@ "https://$*/download"
@@ -126,8 +128,5 @@ $(BUILD)/dl/%.pkg:
 	openssl x509 -in $*.crt -out $*.cer -outform DER
 	chmod go-rwx $@
 
-$(EFIUUID):
+%.uuid:
 	uuidgen --random > $@
-
-clean:
-	rm -rf $(BUILD)

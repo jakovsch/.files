@@ -1,56 +1,163 @@
 #!/usr/bin/busybox.static sh
-set -e
-trap '' INT
-export PATH=/usr/bin
-alias run=busybox.static
+set -e +m
+trap atexit EXIT
+export PATH=/usr/bin IFS=$'\n'
 
 log() {
-    printf "[firstboot] %s\n" "$*"
+    printf "[recovery] %s\n" "$*"
 }
 
-parse() {
-    local key="${1:?}"
-    local val
-    val=" $(run cat /proc/cmdline) "
+atexit() {
+    if [ $? -ne 0 ]; then
+        log "Error"
+        shell
+    fi
+    set +e
+    log "Exit..."
+    sync
+    umount /run/*
+    log "Press any key to reboot"
+    read
+    reboot -f
+}
+
+sb_active() {
+    local sb="$(od -A n -t u1 /sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c | tr -d ' ')"
+    [ -z "${sb##*1}" ]
+}
+
+shell() {
+    set +e
+    if sb_active; then
+        log "Secure boot is active, shell disabled"
+        return
+    fi
+    stty sane
+    exec setsid cttyhack sh -im
+}
+
+cmdline() {
+    local key="${1:?}" val
+    val=" $(cat /proc/cmdline) "
     val="${val##* $key=}"
     val="${val%% *}"
-    run [ "$val" != "" ] && printf "%s" "$val"
+    [ "$val" != "" ] && printf "%s" "$val"
+}
+
+install_links() {
+    busybox.static --list | while read cmd
+    do
+        busybox.static ln -s /usr/bin/busybox.static /usr/bin/"$cmd"
+    done
+}
+
+console_setup() {
+    stty -isig
+    stty intr undef quit undef susp undef
+    echo 0 > /proc/sys/kernel/printk
+    loadkmap < console/keymap
+    #loadfont < console/font
+}
+
+mount_virtual() {
+    log "Mount virtual"
+    mkdir -p /dev /sys /proc /run
+    mount -t devtmpfs none /dev
+    mount -t sysfs none /sys
+    mount -t proc none /proc
+    mount -t tmpfs -o size=75% tmpfs /run
+    log "Mount efivars"
+    mount -t efivarfs none /sys/firmware/efi/efivars
+}
+
+mount_disk() {
+    log "Mount $1"
+    local part="$(findfs $1)"
+    local path="/run/${1##*=}"
+    mkdir -p $path
+    mount ${2:+-o $2} $part $path
+}
+
+load_modules() {
+    ln -s /usr/lib/modules /usr/lib/modules/"$(uname -r)"
+    ln -s /usr/lib/modules/modules.dep.bb /usr/lib/modules/modules.dep
+    depmod
+    log "Load modules"
+    modprobe ahci
+    modprobe sd_mod
+    modprobe btrfs
+    modprobe erofs
+    modprobe hyperv-keyboard
+    log "Load modules (host)"
+    local targets="|$(find /sys -name modalias -exec sort -u {} + | tr '\n' '|')"
+    while read dep
+    do if [ -z "${targets##*|${dep%% *}|*}" ]; then
+        modprobe "${dep##* }"
+    fi done < /usr/lib/modules/booster.alias
+}
+
+do_live() {
+    log "Task: Boot to recovery image"
+    if ! mount_disk LABEL=recovery; then
+        log "Missing resources, ensure recovery image is present"
+        false
+    fi
+    cd /run
+    mkdir live upper work
+    mount -t overlayfs -o lowerdir=recovery,upperdir=upper,workdir=work overlayfs live
+    sed -i -E '/^[A-Z]+=data/d' live/etc/fstab
+    exec switch_root live /sbin/init
+}
+
+do_install() {
+    log "Task: Clean install"
+    if ! mount_disk LABEL=recovery; then
+        log "Missing resources, ensure recovery image is present"
+        false
+    fi
+    local part="$(findfs LABEL=data)"
+    mkfs.btrfs \
+        --metadata dup \
+        --checksum crc32c \
+        --nodesize 16KiB \
+        --sectorsize 4096 \
+        --features free-space-tree \
+        --label data $part
+    mount_disk LABEL=data rw,noatime,subvolid=5
+}
+
+do_reset_home() {
+    log "Task: Reset user data"
+    mount_disk LABEL=data
+}
+
+do_reset_var() {
+    log "Task: Reset local state"
 }
 
 log "Init..."
-run mkdir -p /dev /sys /proc /mnt/esp /mnt/root
-run mount -t devtmpfs none /dev
-run mount -t sysfs none /sys
-run mount -t proc none /proc
-run sleep 1
+install_links
+mount_virtual
+console_setup
+load_modules
+clear
 
-log "System info:"
-run cat /proc/version
-run cat /proc/cmdline
-
-log "Mount root"
-rootfs=$(parse root)
-fstype=$(parse rootfstype)
-#fsflags=$(parse rootflags)
-run mount \
-    ${fstype:+-t $fstype} \
-    -o rw,noatime,subvolid=5 \
-    $(run findfs ${rootfs:?Could not find root!}) \
-    /mnt/root
+log "System info"
+cat /proc/version /proc/cmdline
 
 log "Create initial subvolume layout"
 cd /mnt/root
 while read subvoltree
 do
     local meta=$subvoltree/head/.subvolumetadata
-    run mkdir -p $subvoltree
+    mkdir -p $subvoltree
     btrfs -v subvolume create $subvoltree/head
-    run mkdir -p $meta
-    run chmod go-rwx $meta
-    run echo "base" > $meta/parent
-    run echo "head" > $meta/self
-    run echo "rw" > $meta/type
-    run ln -srf $subvoltree/head $subvoltree/@ptr
+    mkdir -p $meta
+    chmod go-rwx $meta
+    echo "base" > $meta/parent
+    echo "head" > $meta/self
+    echo "rw" > $meta/type
+    ln -srf $subvoltree/head $subvoltree/@ptr
 done <<EOF
 @home
 @nix
@@ -58,33 +165,21 @@ done <<EOF
 EOF
 
 log "Populate base system"
-run mv base/home/* @home/head
-run mv base/nix/* @nix/head
-run mv base/* @root/head
-run rmdir base
+mv base/home/* @home/head
+mv base/nix/* @nix/head
+mv base/* @root/head
+rmdir base
 
 log "Create base snapshots"
 while read subvoltree
 do
     local meta=$subvoltree/base/.subvolumetadata
     btrfs -v subvolume snapshot $subvoltree/head $subvoltree/base
-    run echo "base" > $meta/self
-    run echo "ro" > $meta/type
+    echo "base" > $meta/self
+    echo "ro" > $meta/type
     btrfs -v property set -ts $subvoltree/base ro true
 done <<EOF
 @home
 @nix
 @root
 EOF
-
-log "Cleanup..."
-cd /
-run sync
-run umount /mnt/root
-run umount /mnt/esp
-run umount /proc
-run umount /sys
-run umount /dev
-
-log "Done. Rebooting system..."
-reboot -f

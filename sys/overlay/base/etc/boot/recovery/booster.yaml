@@ -1,4 +1,6 @@
 compression: zstd
 strip: false
 universal: true
-extra_files: reboot,btrfs,busybox.static
+vconsole: true
+modules: btrfs,erofs,kernel/drivers/input/serio/hyperv-keyboard.ko
+extra_files: reboot,btrfs,mkfs.btrfs,sgdisk,lsblk,busybox.static

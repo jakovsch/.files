@@ -1,0 +1,8 @@
+DOWNLOAD=dl
+TEMPLATES=misc/templates
+DESKTOP=misc/desktop
+PUBLICSHARE=misc/share
+MUSIC=media/audio
+VIDEOS=media/video
+PICTURES=media/image
+DOCUMENTS=media/doc
