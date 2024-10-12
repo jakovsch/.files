@@ -1,0 +1,4 @@
+[submodule "sys/efi/theme"]
+	path = sys/efi/theme
+	url = https://github.com/bobafetthotmail/refind-theme-regular
+	branch = master
