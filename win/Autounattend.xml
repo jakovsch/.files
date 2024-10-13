@@ -1,19 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <unattend xmlns="urn:schemas-microsoft-com:unattend">
-    <servicing>
-        <package action="remove">
-            <assemblyIdentity name="Microsoft-Windows-Hello-Face-Migration-Package" version="10.0.19041.1202" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="" />
-        </package>
-        <package action="remove">
-            <assemblyIdentity name="Microsoft-Windows-Hello-Face-Package" version="10.0.19041.1202" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="" />
-        </package>
-        <package action="remove">
-            <assemblyIdentity name="Microsoft-Windows-LanguageFeatures-Speech-en-us-Package" version="10.0.19041.1" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="" />
-        </package>
-        <package action="remove">
-            <assemblyIdentity name="Microsoft-Windows-LanguageFeatures-TextToSpeech-en-us-Package" version="10.0.19041.1" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="" />
-        </package>
-    </servicing>
     <settings pass="windowsPE">
         <component name="Microsoft-Windows-Setup" processorArchitecture="amd64" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
             <UserData>
@@ -82,5 +68,4 @@
             <UILanguageFallback>en-US</UILanguageFallback>
         </component>
     </settings>
-    <cpi:offlineImage cpi:source="catalog:c:/users/jakovsch/downloads/win/iso/install_windows 10 iot enterprise ltsc 2021.clg" xmlns:cpi="urn:schemas-microsoft-com:cpi" />
 </unattend>
